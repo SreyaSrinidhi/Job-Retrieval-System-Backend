@@ -27,4 +27,20 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
+### 5. Set up environment variables
 
+This project requires a Gemini API key to call the LLM. To keep your key secure:
+1. Create a file named .env in the **project root** (same folder as `app.py`).
+2. Add your API key like this:
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+**Important Note**: Do NOT commit the `.env` file to GitHub. It is already in the .gitignore
+
+3. The app will automatically load this key using `python-dotenv`
+
+### 6 Running the Flask App
+
+```bash
+python app.py
+```

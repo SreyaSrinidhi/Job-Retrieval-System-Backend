@@ -1,31 +1,33 @@
 import os
+from google import genai
 from flask import Flask, request, jsonify
-from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
 
 app = Flask(__name__)
-print("KEY PRESENT?", bool(os.getenv("OPENAI_API_KEY")))
-#"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"
-api_key = ""
-# (dont hard code ur key lol but idk wha to do for now
-#client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+load_dotenv()
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 
-client = OpenAI(api_key=api_key)
+#raise error if no Gemini API key
+if not gemini_api_key:
+    raise ValueError("GEMINI_API_KEY not found in environment variables")
 
+#initialize LLM model
+client = genai.Client(api_key=gemini_api_key)
 
-def call_llm(prompt):
-    # basic helper funtion to call openai
-    # just returns text back for now
-
+#basic helper function to make llm call
+#just returns text back for now
+def call_llm(prompt: str) -> str:
     # removed env var check cause we are hard coding for now
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
-    )
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt)
 
-    return response.choices[0].message.content
+    if not response.text:
+        raise ValueError("Empty response from LLM")
 
+    return response.text.strip()
 
 
 @app.route("/")
@@ -36,14 +38,12 @@ def home():
 # sreya meri jaan call this only for now 
 
 
+#simple endpoint for testing llm calls
+#frontend sends JSON in format: {"prompt": "<prompt_text_here>"}
 @app.route("/api/llm-test", methods=["POST"])
 def llm_test():
-    # endpoint the frontend button can hit
-    # sreya meri jaan call this
-    # frontend sends json like { "prompt": "hi" }
-
     data = request.get_json() or {}
-    prompt = data.get("prompt", "say hello")
+    prompt = data.get("prompt", "say hello")   #TODO - is say hello really a desirable default?
 
     try:
         result = call_llm(prompt)
@@ -54,7 +54,6 @@ def llm_test():
         })
 
     except Exception as e:
-        # basic error handeling for now cause eh
         return jsonify({
             "ok": False,
             "error": str(e)
