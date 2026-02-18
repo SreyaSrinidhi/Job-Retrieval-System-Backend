@@ -16,6 +16,12 @@ cd Job-Retrieval-System-Backend
 python -m venv venv
 ```
 
+or 
+
+```bash
+python3.11 -m venv venv
+```
+
 ### 3. Activate the virtual environment:
 
  - Linux/macOS: `source venv/bin/activate`
@@ -34,6 +40,7 @@ This project requires a Gemini API key to call the LLM. To keep your key secure:
 2. Add your API key like this:
 ```bash
 GEMINI_API_KEY=your_api_key_here
+DATABASE_URL="paste-your-external-database-url-here"
 ```
 **Important Note**: Do NOT commit the `.env` file to GitHub. It is already in the .gitignore
 

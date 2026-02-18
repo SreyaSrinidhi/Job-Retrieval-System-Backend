@@ -3,7 +3,8 @@ from google import genai
 from flask import Flask, request, jsonify
 import os
 from dotenv import load_dotenv
-
+import psycopg
+from psycopg.rows import dict_row
 
 app = Flask(__name__)
 load_dotenv()
@@ -29,6 +30,11 @@ def call_llm(prompt: str) -> str:
 
     return response.text.strip()
 
+def get_conn():
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL not set")
+    return psycopg.connect(db_url)
 
 @app.route("/")
 def home():
@@ -58,6 +64,31 @@ def llm_test():
             "ok": False,
             "error": str(e)
         }), 500
+
+# Call to get jobs on db
+@app.route("/jobs", methods=["GET"])
+def list_jobs():
+    limit = request.args.get("limit", default=10, type=int)
+    limit = max(1, min(limit, 50))
+
+    with get_conn() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT id, title, company, location, url, description, source, created_at
+                FROM jobs
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+
+    for r in rows:
+        if r["created_at"]:
+            r["created_at"] = r["created_at"].isoformat()
+
+    return jsonify({"count": len(rows), "jobs": rows})
 
 
 if __name__ == "__main__":
