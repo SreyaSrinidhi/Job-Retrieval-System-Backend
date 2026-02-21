@@ -31,8 +31,6 @@ def create_app() -> Flask:
     
     extensions.llm_client = genai.Client(api_key=gemini_api_key)
     
-    # app.config["LLM_CLIENT"] = genai.Client(api_key=gemini_api_key)
-
     # #initialize db connection pool
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -42,8 +40,6 @@ def create_app() -> Flask:
     extensions.db_pool = ConnectionPool(db_url)
     
     
-    # app.config["DB_POOL"] - ConnectionPool(db_url)
-
     #---------register route blueprints here--------------------------
     app.register_blueprint(health_bp, url_prefix="/health")
     app.register_blueprint(llm_bp, url_prefix="/llm")
