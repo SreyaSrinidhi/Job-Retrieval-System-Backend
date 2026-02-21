@@ -10,7 +10,7 @@ llm_bp = Blueprint("gemini", __name__)
 @llm_bp.route("/llm_test", methods=["POST"])
 def llm_test():
     data = request.get_json() or {}
-    prompt = data.get("prompt", "say hello")   #TODO - is say hello really a desirable default?
+    prompt = data.get("prompt", "say hello")   #NOTE - is say hello really a desirable default?
 
     try:
         result = call_llm(prompt)
