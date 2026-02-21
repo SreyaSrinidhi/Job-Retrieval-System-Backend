@@ -1,7 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.services.llm_service import call_llm
-
-#a simple blueprint for a route to check rest connection health
+from app.services import llm_service
 
 llm_bp = Blueprint("gemini", __name__)
 
@@ -13,7 +11,7 @@ def llm_test():
     prompt = data.get("prompt", "say hello")   #NOTE - is say hello really a desirable default?
 
     try:
-        result = call_llm(prompt)
+        result = llm_service.call_llm(prompt)
 
         return jsonify({
             "ok": True,

@@ -1,5 +1,3 @@
-from ctypes import cast
-from google import genai
 from app.extensions import extensions
 
 #helper function to make llm call
