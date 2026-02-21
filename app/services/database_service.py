@@ -2,6 +2,7 @@ from typing import Any
 from app.extensions import extensions
 from psycopg.rows import dict_row
 
+
 #function to list all jobs on the database
 def list_jobs(jobs_limit: int) -> list[dict[str, Any]]:
     jobs_limit = max(1, min(jobs_limit, 50))

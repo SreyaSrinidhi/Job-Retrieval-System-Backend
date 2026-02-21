@@ -1,1 +1,1 @@
-**NOTE:** For now, I have created each service as a single .py file. As we scale, it may be better to make each one a module, or perhaps a module containing an object? instead - E.T (2/20/26)
+**NOTE:** For now, I have created each service as a single .py file. As we scale, it may be better to make each one a module instead - E.T (2/20/26)
