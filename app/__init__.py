@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask
+from flask_cors import CORS
 from google import genai
 from psycopg_pool import ConnectionPool
 from app.extensions import extensions
@@ -18,6 +19,8 @@ def create_app() -> Flask:
     app = Flask(__name__)
     # Increase maximum upload size to 150 MB
     app.config["MAX_CONTENT_LENGTH"] = 150 * 1024 * 1024
+    #allow all origins for CORS for dev   - Note: if we were being more granular about security, we would only enable cors for specific endpoints or blueprints that we needed the frontend to talk to 
+    CORS(app)
 
     @app.route("/")
     def home():
