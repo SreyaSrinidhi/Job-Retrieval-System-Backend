@@ -86,3 +86,63 @@ app.register_blueprint(<blueprint_name>, url_prefix="/<route_prefix>")
 `./app/extensions.py` defines an **Extensions()** object which is initialized in `./app/__init__.py`. The extensions object should make available all persistent API or Database connection objects.
 
 To access these objects anywhere within `./app/*`, import extensions from app.extensions, and access any field of the extensions object.
+
+## Updating Jobs in the Database
+
+This service supports syncing jobs from RemoteOK and Simplify into Postgres.
+
+### RemoteOK Sync Endpoint
+
+- `POST /database/sync/remoteok`
+
+#### Query Parameters
+
+- `limit` (optional): max jobs to fetch from RemoteOK  
+  - default: `1000`
+- `inactive_after_days` (optional): mark jobs inactive if not seen within N days  
+  - default: `10`
+
+#### What the sync does
+
+- Fetches jobs from RemoteOK.
+- Upserts each job into the `jobs` table.
+- Sets `is_active = TRUE` and updates `last_seen_at` for jobs found in the latest fetch.
+- Marks older unseen RemoteOK jobs as inactive.
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:5000/database/sync/remoteok?limit=1000&inactive_after_days=10"
+```
+
+### Simplify Sync Endpoint
+
+- `POST /database/sync/simplify`
+
+#### Query Parameters
+
+- `limit` (optional): max jobs to process from Simplify sources  
+  - default: `1000`
+- `inactive_after_days` (optional): mark jobs inactive if not seen within N days  
+  - default: `10`
+
+#### What the sync does
+
+- Fetches job listings from Simplify New-Grad sources.
+- Upserts each job into the `jobs` table.
+- Sets `is_active = TRUE` and updates `last_seen_at` for jobs found in the latest fetch.
+- Marks older unseen Simplify jobs as inactive.
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:5000/database/sync/simplify?limit=5000&inactive_after_days=10"
+```
+
+### Running both syncs
+
+```bash
+BASE_URL="http://localhost:5000"
+curl -fsS -X POST "$BASE_URL/database/sync/remoteok?limit=1000&inactive_after_days=10"
+curl -fsS -X POST "$BASE_URL/database/sync/simplify?limit=5000&inactive_after_days=10"
+```
