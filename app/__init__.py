@@ -9,6 +9,14 @@ from app.routes.health import health_bp
 from app.routes.llm import llm_bp
 from app.routes.database_queries import database_bp
 
+extensions.db_pool = ConnectionPool(
+    conninfo=db_url,
+    min_size=1,
+    max_size=5,
+    timeout=60,
+)
+extensions.db_pool.wait()
+
 #factory function to create app with all blueprint routes registered
 def create_app() -> Flask:
     #load environment variables
