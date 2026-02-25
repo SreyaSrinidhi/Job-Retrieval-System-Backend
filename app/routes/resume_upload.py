@@ -20,4 +20,4 @@ def upload_resume():
 
     file.save(save_path)
 
-    return "", 204  # success, no content
+    return "", 200  # success

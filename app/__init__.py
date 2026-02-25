@@ -3,11 +3,13 @@ from dotenv import load_dotenv
 from flask import Flask
 from google import genai
 from psycopg_pool import ConnectionPool
+from flask_cors import CORS
 from app.extensions import extensions
 
 from app.routes.health import health_bp
 from app.routes.llm import llm_bp
 from app.routes.database_queries import database_bp
+from app.routes.resume_upload import upload_bp
 
 #factory function to create app with all blueprint routes registered
 def create_app() -> Flask:
@@ -15,6 +17,7 @@ def create_app() -> Flask:
     load_dotenv()
     
     app = Flask(__name__)
+    CORS(app, origins=["http://localhost:3000"])
 
     @app.route("/")
     def home():
@@ -44,5 +47,6 @@ def create_app() -> Flask:
     app.register_blueprint(health_bp, url_prefix="/health")
     app.register_blueprint(llm_bp, url_prefix="/llm")
     app.register_blueprint(database_bp, url_prefix="/database")
+    app.register_blueprint(upload_bp, url_prefix="/upload")
 
     return app
