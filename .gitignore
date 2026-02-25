@@ -22,3 +22,6 @@ dist/
 
 #environment vars
 .env
+
+# Pdfs
+*.pdf
