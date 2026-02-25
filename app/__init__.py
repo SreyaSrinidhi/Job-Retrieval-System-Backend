@@ -40,8 +40,13 @@ def create_app() -> Flask:
         raise RuntimeError("DATABASE_URL not set")
     
     #connection pool should be better than creating new connection every time we access db
-    extensions.db_pool = ConnectionPool(db_url)
-    
+    extensions.db_pool = ConnectionPool(
+        conninfo=db_url,
+        min_size=1,
+        max_size=5,
+        timeout=60,
+    )
+    extensions.db_pool.wait()    
     
     #---------register route blueprints here--------------------------
     app.register_blueprint(health_bp, url_prefix="/health")
