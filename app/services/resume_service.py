@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict
+from werkzeug.datastructures import FileStorage
 
 from app.services.resume_utils.resume_parser import (
     parse_resume_file,
@@ -24,16 +25,16 @@ _SKILLS_SCHEMA: Dict[str, Any] = {
 }
 
 
-def extract_skills_from_resume_file(file_path: str) -> Dict[str, Any]:
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Resume file not found: {file_path}")
+def extract_skills_from_resume_file(file: FileStorage) -> Dict[str, Any]:
+    # if not os.path.exists(file):
+        # raise FileNotFoundError(f"Resume file not found: {file}")
 
-    _, ext = os.path.splitext(file_path)
-    ext = ext.lower().lstrip(".")
-    if ext not in {"pdf", "docx"}:
-        raise ValueError("Unsupported file type (only pdf, docx)")
+    # _, ext = os.path.splitext(file)
+    # ext = ext.lower().lstrip(".")
+    # if ext not in {"pdf", "docx"}:
+        # raise ValueError("Unsupported file type (only pdf, docx)")
 
-    resume_text = parse_resume_file(file_path, ext)
+    resume_text = parse_resume_file(file)
 
     if looks_like_scanned_or_empty(resume_text):
         raise ValueError(
@@ -45,5 +46,6 @@ def extract_skills_from_resume_file(file_path: str) -> Dict[str, Any]:
     prompt = template.replace("{{RESUME_TEXT}}", resume_text)
 
     result = call_llm_json(prompt, _SKILLS_SCHEMA)
+    print (result)
 
     return result

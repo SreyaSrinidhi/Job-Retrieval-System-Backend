@@ -1,1 +1,0 @@
-Files that are uploaded end up being stored here temporarily
