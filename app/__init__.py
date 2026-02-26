@@ -4,12 +4,13 @@ from flask import Flask
 from flask_cors import CORS
 from google import genai
 from psycopg_pool import ConnectionPool
+from flask_cors import CORS
 from app.extensions import extensions
 
 from app.routes.health import health_bp
 from app.routes.llm import llm_bp
 from app.routes.database_queries import database_bp
-from app.routes.files import files_bp
+from app.routes.resume_upload import upload_bp
 
 #factory function to create app with all blueprint routes registered
 def create_app() -> Flask:
@@ -17,10 +18,7 @@ def create_app() -> Flask:
     load_dotenv()
     
     app = Flask(__name__)
-    # Increase maximum upload size to 150 MB
-    app.config["MAX_CONTENT_LENGTH"] = 150 * 1024 * 1024
-    #allow all origins for CORS for dev   - Note: if we were being more granular about security, we would only enable cors for specific endpoints or blueprints that we needed the frontend to talk to 
-    CORS(app)
+    CORS(app, origins=["http://localhost:3000", "https://job-retrieval-system-frontend.vercel.app/"])
 
     @app.route("/")
     def home():
@@ -43,13 +41,18 @@ def create_app() -> Flask:
         raise RuntimeError("DATABASE_URL not set")
     
     #connection pool should be better than creating new connection every time we access db
-    extensions.db_pool = ConnectionPool(db_url)
-    
+    extensions.db_pool = ConnectionPool(
+        conninfo=db_url,
+        min_size=1,
+        max_size=5,
+        timeout=60,
+    )
+    extensions.db_pool.wait()    
     
     #---------register route blueprints here--------------------------
     app.register_blueprint(health_bp, url_prefix="/health")
     app.register_blueprint(llm_bp, url_prefix="/llm")
     app.register_blueprint(database_bp, url_prefix="/database")
-    app.register_blueprint(files_bp, url_prefix="/files")
+    app.register_blueprint(upload_bp, url_prefix="/upload")
 
     return app
