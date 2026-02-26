@@ -6,16 +6,6 @@ import docx
 from typing import BinaryIO
 from werkzeug.datastructures import FileStorage
 
-
-# def extract_text_from_pdf(path: str) -> str:
-#     parts: list[str] = []
-#     with pdfplumber.open(path) as pdf:
-#         for page in pdf.pages:
-#             # Keeps line breaks reasonably well
-#             txt = page.extract_text() or ""
-#             parts.append(txt)
-#     return "\n\n".join(parts).strip()
-
 def extract_text_from_pdf(stream: BinaryIO) -> str:
   
     parts: list[str] = []
@@ -24,12 +14,6 @@ def extract_text_from_pdf(stream: BinaryIO) -> str:
         for page in pdf.pages:
             parts.append(page.extract_text() or "")
     return "\n\n".join(parts).strip()
-
-
-# def extract_text_from_docx(path: str) -> str:
-#     d = docx.Document(path)
-#     # Join paragraphs with newlines to preserve structure
-#     return "\n".join(p.text for p in d.paragraphs if p.text is not None).strip()
 
 def extract_text_from_docx(data: bytes) -> str:
     # python-docx expects a path OR a file-like object.
@@ -46,7 +30,6 @@ def normalize_resume_text(text: str) -> str:
     text = "\n".join(line.rstrip() for line in text.split("\n"))
     return text.strip()
 
-#TODO - take in FileStorage from werkzeug library - no other inputs
 def parse_resume_file(upload: FileStorage) -> str:
     # Only input: FileStorage
     filename = (upload.filename or "").lower()
