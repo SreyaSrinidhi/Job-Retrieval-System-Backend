@@ -46,5 +46,4 @@ def extract_skills_from_resume_file(file_path: str) -> Dict[str, Any]:
 
     result = call_llm_json(prompt, _SKILLS_SCHEMA)
 
-
     return result

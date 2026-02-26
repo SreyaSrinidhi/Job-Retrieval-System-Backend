@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 
+
 from app.services.resume_service import extract_skills_from_resume_file
 
 upload_bp = Blueprint("upload", __name__)

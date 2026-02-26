@@ -1,5 +1,6 @@
 from werkzeug.datastructures import FileStorage
 
+#NOTE - ethan's old - to be deleted
 #TODO @jia @sreya - write resume parsing logic in here
 
 #Note - for testing, can curl endpoint to pass file like this or similar:
