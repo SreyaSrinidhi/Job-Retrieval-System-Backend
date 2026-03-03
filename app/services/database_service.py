@@ -8,11 +8,6 @@ import requests
 import hashlib
 import re
 
-import requests
-
-from app.extensions import extensions
-
-
 #function to list all jobs on the database
 def list_jobs(jobs_limit: Optional[int] = None) -> list[dict[str, Any]]:
     with extensions.get_db_pool().connection() as conn:
@@ -67,6 +62,154 @@ def get_jobs_payload(limit_raw: Optional[str]) -> tuple[dict[str, Any], int]:
 
     jobs = list_jobs(limit)
     return {"count": len(jobs), "jobs": jobs}, 200
+
+
+def create_resume(resume_text: str, filename: Optional[str] = None, file_url: Optional[str] = None) -> int:
+    # Insert parsed resume text and optional metadata; return new resume id
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO resumes (resume_text, filename, file_url)
+                VALUES (%s, %s, %s)
+                RETURNING id
+                """,
+                (resume_text, filename, file_url),
+            )
+            resume_id = cur.fetchone()[0]
+    return int(resume_id)
+
+
+def create_resume_extraction(
+    resume_id: int, extracted_json: Dict[str, Any], model_name: Optional[str] = None
+) -> int:
+    # Store structured LLM extraction for a resume; return extraction id
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO resume_extractions (resume_id, extracted_json, model_name)
+                VALUES (%s, %s::jsonb, %s)
+                RETURNING id
+                """,
+                (resume_id, json.dumps(extracted_json), model_name),
+            )
+            extraction_id = cur.fetchone()[0]
+    return int(extraction_id)
+
+
+def get_latest_resume_extraction(resume_id: int) -> Optional[dict[str, Any]]:
+    # Fetch the latest extraction record for a resume
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT id, resume_id, extracted_json, model_name, created_at
+                FROM resume_extractions
+                WHERE resume_id = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (resume_id,),
+            )
+            row = cur.fetchone()
+
+    if row and row.get("created_at"):
+        row["created_at"] = row["created_at"].isoformat()
+    return row
+
+
+def list_active_jobs_for_matching() -> list[dict[str, Any]]:
+    # Return active jobs with the fields needed for matching
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT id, title, company, location, description, tags
+                FROM jobs
+                WHERE is_active = TRUE
+                """
+            )
+            return cur.fetchall()
+
+
+def create_or_update_match(
+    resume_id: int,
+    job_id: int,
+    score: float,
+    explanation: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> int:
+    # Upsert one resume-job match score and return match id
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO matches (resume_id, job_id, score, explanation, metadata)
+                VALUES (%s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT (resume_id, job_id)
+                DO UPDATE SET
+                    score = EXCLUDED.score,
+                    explanation = EXCLUDED.explanation,
+                    metadata = EXCLUDED.metadata
+                RETURNING id
+                """,
+                (resume_id, job_id, score, explanation, json.dumps(metadata or {})),
+            )
+            match_id = cur.fetchone()[0]
+    return int(match_id)
+
+
+def clear_matches_for_resume(resume_id: int) -> int:
+    # Remove existing matches for a resume before re-scoring
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM matches WHERE resume_id = %s", (resume_id,))
+            return cur.rowcount
+
+
+def list_top_matches_for_resume(resume_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    # Return top scored active jobs for frontend display
+    safe_limit = max(1, min(limit, 10))
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.id AS match_id,
+                    m.resume_id,
+                    m.job_id,
+                    m.score,
+                    m.explanation,
+                    m.metadata,
+                    m.created_at AS matched_at,
+                    j.title,
+                    j.company,
+                    j.location,
+                    j.url,
+                    j.apply_url,
+                    j.description,
+                    j.tags,
+                    j.date_posted
+                FROM matches m
+                JOIN jobs j ON j.id = m.job_id
+                WHERE m.resume_id = %s
+                  AND j.is_active = TRUE
+                ORDER BY m.score DESC, j.date_posted DESC NULLS LAST, m.created_at DESC
+                LIMIT %s
+                """,
+                (resume_id, safe_limit),
+            )
+            rows = cur.fetchall()
+
+    for row in rows:
+        if row.get("matched_at"):
+            row["matched_at"] = row["matched_at"].isoformat()
+        if row.get("date_posted"):
+            row["date_posted"] = row["date_posted"].isoformat()
+    return rows
+
+
 
 #-------------------Service functions for syncing RemoteOK and SimplifyJobs----------------------------
 

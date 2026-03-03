@@ -1,9 +1,8 @@
 import os
 from flask import Blueprint, request, jsonify
-from werkzeug.utils import secure_filename
 
 
-from app.services.resume_service import extract_skills_from_resume_file
+from app.services.resume_service import process_uploaded_resume
 
 upload_bp = Blueprint("upload", __name__)
 
@@ -13,6 +12,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @upload_bp.route("/upload_resume", methods=["POST"])
 def upload_resume():
+    # Handle resume upload and return resume/extraction ids
     file = request.files.get("resume")
 
     if not file or not file.filename:
@@ -23,9 +23,7 @@ def upload_resume():
     # file.save(save_path)
 
     try:
-        data = extract_skills_from_resume_file(file)
+        data = process_uploaded_resume(file)
         return jsonify({"ok": True, "file": file.filename, "data": data}), 200
     except Exception as e:
         return jsonify({"ok": False, "file": file.filename, "error": str(e)}), 500
-
-

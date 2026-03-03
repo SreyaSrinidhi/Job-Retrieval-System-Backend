@@ -1,5 +1,5 @@
-import os
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
 
 from app.services.resume_utils.resume_parser import (
@@ -8,6 +8,15 @@ from app.services.resume_utils.resume_parser import (
 )
 from app.services.prompt_loader import load_prompt_text
 from app.services.llm_service import call_llm_json
+from app.services.database_service import (
+    clear_matches_for_resume,
+    create_or_update_match,
+    create_resume,
+    create_resume_extraction,
+    get_latest_resume_extraction,
+    list_active_jobs_for_matching,
+    list_top_matches_for_resume,
+)
 
 
 #simple one we can change it later 
@@ -26,16 +35,13 @@ _SKILLS_SCHEMA: Dict[str, Any] = {
 
 
 def extract_skills_from_resume_file(file: FileStorage) -> Dict[str, Any]:
-    # if not os.path.exists(file):
-        # raise FileNotFoundError(f"Resume file not found: {file}")
-
-    # _, ext = os.path.splitext(file)
-    # ext = ext.lower().lstrip(".")
-    # if ext not in {"pdf", "docx"}:
-        # raise ValueError("Unsupported file type (only pdf, docx)")
-
+    # Parse uploaded file and extract keyword JSON using the LLM prompt
     resume_text = parse_resume_file(file)
+    return extract_skills_from_resume_text(resume_text)
 
+
+def extract_skills_from_resume_text(resume_text: str) -> Dict[str, Any]:
+    # Run validation + LLM keyword extraction on already parsed resume text
     if looks_like_scanned_or_empty(resume_text):
         raise ValueError(
             "Resume text extraction looks empty (possibly a scanned PDF). "
@@ -45,7 +51,123 @@ def extract_skills_from_resume_file(file: FileStorage) -> Dict[str, Any]:
     template = load_prompt_text("extract_skills.txt")
     prompt = template.replace("{{RESUME_TEXT}}", resume_text)
 
-    result = call_llm_json(prompt, _SKILLS_SCHEMA)
-    print (result)
+    return call_llm_json(prompt, _SKILLS_SCHEMA)
 
-    return result
+
+def process_uploaded_resume(file: FileStorage) -> Dict[str, Any]:
+    # Full upload flow: parse resume, extract keywords, and store both records in db
+    resume_text = parse_resume_file(file)
+    extracted = extract_skills_from_resume_text(resume_text)
+
+    resume_id = create_resume(resume_text=resume_text, filename=file.filename)
+    extraction_id = create_resume_extraction(
+        resume_id=resume_id,
+        extracted_json=extracted,
+        model_name="gemini-2.5-flash",
+    )
+
+    return {
+        "resume_id": resume_id,
+        "extraction_id": extraction_id,
+        "extracted": extracted,
+    }
+
+
+def _normalize_keywords(extracted_json: Dict[str, Any]) -> List[str]:
+    # Normalize and deduplicate extracted keywords for matching
+    candidates: List[str] = []
+
+    for key in ("skills", "keywords", "key_words"):
+        value = extracted_json.get(key)
+        if isinstance(value, list):
+            candidates.extend(str(v) for v in value)
+
+    seen = set()
+    normalized: List[str] = []
+    for item in candidates:
+        cleaned = re.sub(r"\s+", " ", item.strip().lower())
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _tokenize_text(text: str) -> set[str]:
+    # Tokenize job text into searchable lowercase terms
+    return set(re.findall(r"[a-z0-9+#.\-]+", text.lower()))
+
+def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
+    # Score one resume against all active jobs and persist match rows
+    # TODO - we need to add more complex scoring logic later
+    extraction = get_latest_resume_extraction(resume_id)
+    if not extraction:
+        raise ValueError(f"No extraction found for resume_id={resume_id}")
+
+    extracted_json = extraction.get("extracted_json")
+    if not isinstance(extracted_json, dict):
+        raise ValueError(f"Invalid extraction payload for resume_id={resume_id}")
+
+    keywords = _normalize_keywords(extracted_json)
+    clear_matches_for_resume(resume_id)
+
+    if not keywords:
+        return {"resume_id": resume_id, "keywords": 0, "jobs_scored": 0, "matches_saved": 0}
+
+    jobs = list_active_jobs_for_matching()
+    matches_saved = 0
+
+    for job in jobs:
+        tags = job.get("tags") or []
+        if isinstance(tags, list):
+            tags_text = " ".join(str(tag) for tag in tags)
+        else:
+            tags_text = str(tags)
+
+        combined_text = " ".join(
+            [
+                str(job.get("title") or ""),
+                str(job.get("company") or ""),
+                str(job.get("location") or ""),
+                str(job.get("description") or ""),
+                tags_text,
+            ]
+        ).lower()
+
+        tokens = _tokenize_text(combined_text)
+        matched_keywords: List[str] = []
+
+        for keyword in keywords:
+            if " " in keyword:
+                if keyword in combined_text:
+                    matched_keywords.append(keyword)
+            elif keyword in tokens:
+                matched_keywords.append(keyword)
+
+        if not matched_keywords:
+            continue
+
+        score = round((len(matched_keywords) / len(keywords)) * 100.0, 2)
+        explanation = f"Matched {len(matched_keywords)} of {len(keywords)} keywords."
+        metadata = {"matched_keywords": matched_keywords, "total_keywords": len(keywords)}
+
+        create_or_update_match(
+            resume_id=resume_id,
+            job_id=int(job["id"]),
+            score=score,
+            explanation=explanation,
+            metadata=metadata,
+        )
+        matches_saved += 1
+
+    return {
+        "resume_id": resume_id,
+        "keywords": len(keywords),
+        "jobs_scored": len(jobs),
+        "matches_saved": matches_saved,
+    }
+
+
+def get_display_jobs_for_resume(resume_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    # Fetch top ranked jobs to send to the frontend
+    return list_top_matches_for_resume(resume_id=resume_id, limit=limit)

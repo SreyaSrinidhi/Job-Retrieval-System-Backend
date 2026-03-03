@@ -114,7 +114,7 @@ This service supports syncing jobs from RemoteOK and Simplify into Postgres.
 #### Example
 
 ```bash
-curl -X POST "http://localhost:5000/database/sync/remoteok?limit=1000&inactive_after_days=10"
+curl -X POST "http://127.0.0.1:5000/database/sync/remoteok?limit=1000&inactive_after_days=10"
 ```
 
 ### Simplify Sync Endpoint
@@ -138,13 +138,50 @@ curl -X POST "http://localhost:5000/database/sync/remoteok?limit=1000&inactive_a
 #### Example
 
 ```bash
-curl -X POST "http://localhost:5000/database/sync/simplify?limit=5000&inactive_after_days=10"
+curl -X POST "http://127.0.0.1:5000/database/sync/simplify?limit=5000&inactive_after_days=10"
 ```
 
 ### Running both syncs
 
 ```bash
-BASE_URL="http://localhost:5000"
+BASE_URL="http://127.0.0.1:5000"
 curl -fsS -X POST "$BASE_URL/database/sync/remoteok?limit=1000&inactive_after_days=10"
 curl -fsS -X POST "$BASE_URL/database/sync/simplify?limit=5000&inactive_after_days=10"
+```
+
+## Resume Upload -> Match Scoring Flow
+
+Use this flow to parse a resume, extract keywords, score jobs, and fetch display-ready matches.
+
+### 1. Upload resume (parse + extract + store)
+
+- Endpoint: `POST /upload/upload_resume`
+- Form-data key: `resume`
+
+```bash
+curl -X POST "http://127.0.0.1:5000/upload/upload_resume" \
+  -F "resume=@/absolute/path/to/resume.pdf"
+```
+
+### 2. Score one resume against active jobs
+
+- Endpoint: `POST /database/resumes/<resume_id>/score`
+
+```bash
+curl -X POST "http://127.0.0.1:5000/database/resumes/<resume_id>/score"
+```
+
+What it does:
+- loads latest extraction for that resume
+- compares extracted keywords against active job text/tags
+- stores scores in `matches`
+
+### 3. Fetch top matches for frontend
+
+- Endpoint: `GET /database/resumes/<resume_id>/matches`
+- Optional query param: `limit`
+- Backend hard-caps to max `10` matches
+
+```bash
+curl "http://127.0.0.1:5000/database/resumes/<resume_id>/matches?limit=10"
 ```
