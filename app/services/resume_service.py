@@ -19,7 +19,7 @@ from app.services.database_service import (
 )
 
 
-#simple one we can change it later 
+#JSON schema for extracted skills from resume 
 _SKILLS_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -39,7 +39,7 @@ def extract_skills_from_resume_file(file: FileStorage) -> Dict[str, Any]:
     resume_text = parse_resume_file(file)
     return extract_skills_from_resume_text(resume_text)
 
-
+#helper method to extract skills from texxt of a resume
 def extract_skills_from_resume_text(resume_text: str) -> Dict[str, Any]:
     # Run validation + LLM keyword extraction on already parsed resume text
     if looks_like_scanned_or_empty(resume_text):
@@ -53,23 +53,22 @@ def extract_skills_from_resume_text(resume_text: str) -> Dict[str, Any]:
 
     return call_llm_json(prompt, _SKILLS_SCHEMA)
 
-
+# Full upload flow: parse resume, extract keywords, and store both records in db
 def process_uploaded_resume(file: FileStorage) -> Dict[str, Any]:
-    # Full upload flow: parse resume, extract keywords, and store both records in db
     resume_text = parse_resume_file(file)
-    extracted = extract_skills_from_resume_text(resume_text)
+    extracted_skills = extract_skills_from_resume_text(resume_text)
 
     resume_id = create_resume(resume_text=resume_text, filename=file.filename)
     extraction_id = create_resume_extraction(
         resume_id=resume_id,
-        extracted_json=extracted,
+        extracted_json=extracted_skills,
         model_name="gemini-2.5-flash",
     )
 
     return {
         "resume_id": resume_id,
         "extraction_id": extraction_id,
-        "extracted": extracted,
+        "extracted": extracted_skills,
     }
 
 

@@ -18,7 +18,7 @@ def call_llm(prompt: str) -> str:
 
     return response.text.strip()
 
-   #makes it returb a json and match a schema made a easy schema for now
+# Call LLM with response formatted as JSON. Output JSON matches input schema
 def call_llm_json(prompt: str, json_schema: Dict[str, Any]) -> Dict[str, Any]:
    
     client = extensions.get_llm_client()

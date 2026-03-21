@@ -14,13 +14,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def upload_resume():
     # Handle resume upload and return resume/extraction ids
     file = request.files.get("resume")
+    user_job_description = request.form.get("user_job_description")
 
     if not file or not file.filename:
         return jsonify({"ok": False, "error": "No file uploaded under key 'resume'"}), 400
-
-    # filename = secure_filename(file.filename)
-    # save_path = os.path.join(UPLOAD_DIR, filename)
-    # file.save(save_path)
 
     try:
         data = process_uploaded_resume(file)
