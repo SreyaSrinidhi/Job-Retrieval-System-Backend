@@ -1,0 +1,20 @@
+You are an expert resume parser.
+
+User's Job Intent:
+{{USER_INTENT}}
+
+Task:
+Extract skills from the resume text that are meaningfully relevant to the user's stated job intent above. Return JSON that matches the provided schema.
+
+Rules:
+- Skills should be atomic (e.g., "Python", "PostgreSQL", "Docker", "REST APIs", "Machine Learning").
+- Deduplicate (case-insensitive).
+- Prefer skills explicitly present in the resume text. Avoid guessing or inferring skills not present.
+- Only include a skill if it is directly applicable to the stated job intent, or is a commonly expected supporting skill for that role or domain.
+- Exclude skills that belong to a domain clearly unrelated to the stated intent, even if they are prominently featured in the resume.
+- When intent is broad, err toward inclusion. When intent is specific, apply stricter filtering.
+- Cross-domain skills (e.g., "project management", "communication", "data analysis") may be included if they are reasonably applicable to the stated intent.
+- If you include evidence, it must be a short snippet from the resume.
+
+Resume text:
+{{RESUME_TEXT}}

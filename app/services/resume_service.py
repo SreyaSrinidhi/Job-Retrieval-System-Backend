@@ -33,14 +33,9 @@ _SKILLS_SCHEMA: Dict[str, Any] = {
     "required": ["skills"]
 }
 
-
-def extract_skills_from_resume_file(file: FileStorage) -> Dict[str, Any]:
-    # Parse uploaded file and extract keyword JSON using the LLM prompt
-    resume_text = parse_resume_file(file)
-    return extract_skills_from_resume_text(resume_text)
-
-#helper method to extract skills from texxt of a resume
-def extract_skills_from_resume_text(resume_text: str) -> Dict[str, Any]:
+#helper method to extract skills from text of a resume
+#takes in user_job_description to instruct LLM on what keywords to value
+def extract_skills_from_resume_text(resume_text: str, user_job_description: str) -> Dict[str, Any]:
     # Run validation + LLM keyword extraction on already parsed resume text
     if looks_like_scanned_or_empty(resume_text):
         raise ValueError(
@@ -54,9 +49,9 @@ def extract_skills_from_resume_text(resume_text: str) -> Dict[str, Any]:
     return call_llm_json(prompt, _SKILLS_SCHEMA)
 
 # Full upload flow: parse resume, extract keywords, and store both records in db
-def process_uploaded_resume(file: FileStorage) -> Dict[str, Any]:
+def process_uploaded_resume(file: FileStorage, user_job_description: str) -> Dict[str, Any]:
     resume_text = parse_resume_file(file)
-    extracted_skills = extract_skills_from_resume_text(resume_text)
+    extracted_skills = extract_skills_from_resume_text(resume_text, user_job_description)
 
     resume_id = create_resume(resume_text=resume_text, filename=file.filename)
     extraction_id = create_resume_extraction(

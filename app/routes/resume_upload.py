@@ -20,7 +20,7 @@ def upload_resume():
         return jsonify({"ok": False, "error": "No file uploaded under key 'resume'"}), 400
 
     try:
-        data = process_uploaded_resume(file)
+        data = process_uploaded_resume(file, user_job_description)
         return jsonify({"ok": True, "file": file.filename, "data": data}), 200
     except Exception as e:
         return jsonify({"ok": False, "file": file.filename, "error": str(e)}), 500
