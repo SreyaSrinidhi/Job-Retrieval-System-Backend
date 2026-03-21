@@ -35,7 +35,7 @@ _SKILLS_SCHEMA: Dict[str, Any] = {
 
 #helper method to extract skills from text of a resume
 #takes in user_job_description to instruct LLM on what keywords to value
-def extract_skills_from_resume_text(resume_text: str, user_job_description: str) -> Dict[str, Any]:
+def extract_skills_from_resume_text(resume_text: str, user_intent: str) -> Dict[str, Any]:
     # Run validation + LLM keyword extraction on already parsed resume text
     if looks_like_scanned_or_empty(resume_text):
         raise ValueError(
@@ -43,7 +43,8 @@ def extract_skills_from_resume_text(resume_text: str, user_job_description: str)
             "Try uploading a text-based PDF or DOCX."
         )
 
-    template = load_prompt_text("extract_skills.txt")
+    template = load_prompt_text("extract_relevant_skills.txt") if user_intent else load_prompt_text("extract_all_skills.txt") 
+    template = template.replace("{{USER_INTENT}}", user_intent)   #Add user intent - will do nothing for prompt where this field does not exist
     prompt = template.replace("{{RESUME_TEXT}}", resume_text)
 
     return call_llm_json(prompt, _SKILLS_SCHEMA)
