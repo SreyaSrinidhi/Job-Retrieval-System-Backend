@@ -1,0 +1,30 @@
+name: Daily job sync
+
+on:
+  schedule:
+    # 6:00 AM in ET
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL }}
+    steps:
+      - name: Validate required configuration
+        run: |
+          if [ -z "${BASE_URL}" ]; then
+            echo "BASE_URL secret is required"
+            exit 1
+          fi
+
+      - name: Trigger RemoteOK sync
+        run: |
+          curl -fsS -X POST \
+            "${BASE_URL}/database/sync/remoteok?limit=1000&inactive_after_days=10"
+
+      - name: Trigger Simplify sync
+        run: |
+          curl -fsS -X POST \
+            "${BASE_URL}/database/sync/simplify?limit=5000&inactive_after_days=10"
