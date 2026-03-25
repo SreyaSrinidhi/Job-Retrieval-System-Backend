@@ -44,7 +44,7 @@ def extract_skills_from_resume_text(resume_text: str, user_intent: str) -> Dict[
         )
 
     template = load_prompt_text("extract_relevant_skills.txt") if user_intent else load_prompt_text("extract_all_skills.txt") 
-    template = template.replace("{{USER_INTENT}}", user_intent)   #Add user intent - will do nothing for prompt where this field does not exist
+    template = template.replace("{{USER_INTENT}}", user_intent or "")   #Add user intent - will do nothing for prompt where this field does not exist
     prompt = template.replace("{{RESUME_TEXT}}", resume_text)
 
     return call_llm_json(prompt, _SKILLS_SCHEMA)
