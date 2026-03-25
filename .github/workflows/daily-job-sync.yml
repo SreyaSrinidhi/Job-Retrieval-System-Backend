@@ -19,11 +19,6 @@ jobs:
             exit 1
           fi
 
-      - name: Trigger RemoteOK sync
-        run: |
-          curl -fsS -X POST \
-            "${BASE_URL}/database/sync/remoteok?limit=1000&inactive_after_days=10"
-
       - name: Trigger Simplify sync
         run: |
           curl -fsS -X POST \
