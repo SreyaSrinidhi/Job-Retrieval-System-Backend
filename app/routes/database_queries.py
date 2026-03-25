@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+import traceback
 from app.services.database_service import sync_remoteok_jobs
 from app.services.database_service import get_jobs_payload
 from app.services.database_service import sync_simplify_jobs
@@ -40,12 +41,13 @@ def sync_remoteok() -> tuple:
         stats = sync_remoteok_jobs(limit=limit, inactive_after_days=inactive_days)
         return jsonify({"status": "ok", "source": "remoteok", **stats}), 200
     except Exception as e:
+        traceback.print_exc()
         return (
             jsonify(
                 {
                     "status": "error",
                     "source": "remoteok",
-                    "message": "failed to sync RemoteOK jobs"
+                    "message": str(e)
                 }
             ),
             500,
