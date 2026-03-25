@@ -260,7 +260,12 @@ def fetch_remoteok_jobs(limit: int = 1000) -> List[RemoteOkJob]:
     """
     resp = requests.get(
         REMOTEOK_API_URL,
-        headers={"User-Agent": "CWRU-Capstone-JobFetcher/1.0"},
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://remoteok.com/",
+            "Origin": "https://remoteok.com",
+        },
         timeout=30,
     )
     resp.raise_for_status()
