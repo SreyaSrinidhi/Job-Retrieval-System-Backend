@@ -1,5 +1,8 @@
 BEGIN;
 
+-- Required for vector embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- RESUMES
 CREATE TABLE IF NOT EXISTS resumes (
     id              BIGSERIAL PRIMARY KEY,
@@ -7,7 +10,7 @@ CREATE TABLE IF NOT EXISTS resumes (
     -- Raw resume text extracted
     resume_text     TEXT NOT NULL,
 
-    -- Optional metadata ?
+    -- Optional metadata
     filename        TEXT,
     file_url        TEXT,
 
@@ -24,6 +27,8 @@ CREATE TABLE IF NOT EXISTS resume_extractions (
 
     -- e.g. {"skills":["python","sql"], "titles":["data analyst"], ...}
     extracted_json  JSONB NOT NULL,
+    -- 1536 is a common embedding size. If we choose a different embedding model later, this dimension may need to change.
+    embedding       vector(1536),
 
     model_name      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -31,6 +36,10 @@ CREATE TABLE IF NOT EXISTS resume_extractions (
 
 CREATE INDEX IF NOT EXISTS idx_resume_extractions_resume_id
 ON resume_extractions(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_extractions_embedding_cosine
+ON resume_extractions
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
 
 -- JOBS (RemoteOK now, supports other sources later)
 CREATE TABLE IF NOT EXISTS jobs (
@@ -54,6 +63,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     company_logo    TEXT,
     tags            JSONB,
     description     TEXT,
+    -- 1536 is a common embedding size. If we choose a different embedding model later, this dimension may need to change.
+    embedding       vector(1536),
     date_posted     TIMESTAMPTZ,
     epoch           BIGINT,
     salary_min      INTEGER,
@@ -76,6 +87,10 @@ CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
 CREATE INDEX IF NOT EXISTS idx_jobs_title ON jobs(title);
 CREATE INDEX IF NOT EXISTS idx_jobs_date_posted ON jobs(date_posted DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_last_seen_at ON jobs(last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_embedding_cosine
+ON jobs
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
 
 -- MATCHES
 -- Stores resume->job match score + explanation
