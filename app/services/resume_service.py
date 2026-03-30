@@ -1,4 +1,5 @@
 import re
+import time
 from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
 
@@ -95,7 +96,12 @@ def _tokenize_text(text: str) -> set[str]:
 def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
     # Score one resume against all active jobs and persist match rows
     # TODO - we need to add more complex scoring logic later
-    extraction = get_latest_resume_extraction(resume_id)
+
+    #NOTE - remove
+    start = time.time()
+
+    print("START TEST----------------------------------------------")
+    extraction = get_latest_resume_extraction(resume_id)                        #NOTE <---------------------------------------------------------------
     if not extraction:
         raise ValueError(f"No extraction found for resume_id={resume_id}")
 
@@ -103,16 +109,29 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
     if not isinstance(extracted_json, dict):
         raise ValueError(f"Invalid extraction payload for resume_id={resume_id}")
 
-    keywords = _normalize_keywords(extracted_json)
-    clear_matches_for_resume(resume_id)
+    keywords = _normalize_keywords(extracted_json)                             #NOTE <-----------------------------------------------------
+
+    clear_matches_for_resume(resume_id)                                        #NOTE <-----------------------------------------------------
 
     if not keywords:
         return {"resume_id": resume_id, "keywords": 0, "jobs_scored": 0, "matches_saved": 0}
 
-    jobs = list_active_jobs_for_matching()
+    jobs = list_active_jobs_for_matching()                                      #NOTE <----------------------------------------------------
     matches_saved = 0
 
+    print(f"Looping Through {len(jobs)} Jobs")
+    
+    #NOTE - MAKING LISTS
+    seg1 = []
+    seg2 = []
+    seg3 = []
+    seg4 = []
+    seg5 = []
+
+
     for job in jobs:
+        currTime = time.time()      #NOTE - REMOVE
+
         tags = job.get("tags") or []
         if isinstance(tags, list):
             tags_text = " ".join(str(tag) for tag in tags)
@@ -129,7 +148,18 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
             ]
         ).lower()
 
-        tokens = _tokenize_text(combined_text)
+        #NOTE - segment 1
+        seg1.append(time.time() - currTime)
+        currTime = time.time()
+
+
+
+        tokens = _tokenize_text(combined_text)                                      #NOTE <---------------------------------
+
+        #NOTE - end segment 2
+        seg2.append(time.time() - currTime)
+        currTime = time.time()
+
         matched_keywords: List[str] = []
 
         for keyword in keywords:
@@ -139,6 +169,10 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
             elif keyword in tokens:
                 matched_keywords.append(keyword)
 
+        #NOTE - end segment 3
+        seg3.append(time.time() - currTime)
+        currTime = time.time()
+
         if not matched_keywords:
             continue
 
@@ -146,7 +180,12 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
         explanation = f"Matched {len(matched_keywords)} of {len(keywords)} keywords."
         metadata = {"matched_keywords": matched_keywords, "total_keywords": len(keywords)}
 
-        create_or_update_match(
+
+        #NOTE - end segment 4 - likely no biggie
+        seg4.append(time.time() - currTime)
+        currTime = time.time()
+
+        create_or_update_match(                                                        #NOTE <---------------------------------
             resume_id=resume_id,
             job_id=int(job["id"]),
             score=score,
@@ -155,6 +194,27 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
         )
         matches_saved += 1
 
+        #NOTE - end segment 5
+        seg5.append(time.time() - currTime)
+        currTime = time.time()
+
+
+    print(f"Completed job loop, finished function: {time.time() - start:.6f}s")
+
+    print("Segment Time Averages:")
+    seg1_avg = sum(seg1) / len(seg1)
+    seg2_avg = sum(seg2) / len(seg2)
+    seg3_avg = sum(seg3) / len(seg3)
+    seg4_avg = sum(seg4) / len(seg4)
+    seg5_avg = sum(seg5) / len(seg5)
+    print(f"SEG 1 AVG: {seg1_avg}")
+    print(f"SEG 2 AVG: {seg2_avg}")
+    print(f"SEG 3 AVG: {seg3_avg}")
+    print(f"SEG 4 AVG: {seg4_avg}")
+    print(f"SEG 5 AVG: {seg5_avg}")
+
+
+    print("END TEST------------------------------------------")
     return {
         "resume_id": resume_id,
         "keywords": len(keywords),
