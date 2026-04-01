@@ -1,4 +1,5 @@
 import re
+import time
 from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
 
@@ -10,7 +11,7 @@ from app.services.prompt_loader import load_prompt_text
 from app.services.llm_service import call_llm_json
 from app.services.database_service import (
     clear_matches_for_resume,
-    create_or_update_match,
+    create_or_update_matches,
     create_resume,
     create_resume_extraction,
     get_latest_resume_extraction,
@@ -95,6 +96,7 @@ def _tokenize_text(text: str) -> set[str]:
 def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
     # Score one resume against all active jobs and persist match rows
     # TODO - we need to add more complex scoring logic later
+
     extraction = get_latest_resume_extraction(resume_id)
     if not extraction:
         raise ValueError(f"No extraction found for resume_id={resume_id}")
@@ -104,6 +106,7 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
         raise ValueError(f"Invalid extraction payload for resume_id={resume_id}")
 
     keywords = _normalize_keywords(extracted_json)
+
     clear_matches_for_resume(resume_id)
 
     if not keywords:
@@ -111,7 +114,8 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
 
     jobs = list_active_jobs_for_matching()
     matches_saved = 0
-
+    matches = []
+    
     for job in jobs:
         tags = job.get("tags") or []
         if isinstance(tags, list):
@@ -130,6 +134,7 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
         ).lower()
 
         tokens = _tokenize_text(combined_text)
+
         matched_keywords: List[str] = []
 
         for keyword in keywords:
@@ -146,14 +151,12 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
         explanation = f"Matched {len(matched_keywords)} of {len(keywords)} keywords."
         metadata = {"matched_keywords": matched_keywords, "total_keywords": len(keywords)}
 
-        create_or_update_match(
-            resume_id=resume_id,
-            job_id=int(job["id"]),
-            score=score,
-            explanation=explanation,
-            metadata=metadata,
-        )
+        #add to list of matches
+        matches.append([resume_id, int(job["id"]), score, explanation, metadata])
         matches_saved += 1
+
+    #update matches in DB
+    create_or_update_matches(matches)
 
     return {
         "resume_id": resume_id,

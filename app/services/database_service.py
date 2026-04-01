@@ -7,6 +7,8 @@ from datetime import datetime, timezone, timedelta
 import requests
 import hashlib
 import re
+from psycopg.types.json import Json
+
 
 #function to list all jobs on the database
 def list_jobs(jobs_limit: Optional[int] = None) -> list[dict[str, Any]]:
@@ -133,31 +135,65 @@ def list_active_jobs_for_matching() -> list[dict[str, Any]]:
             return cur.fetchall()
 
 
-def create_or_update_match(
-    resume_id: int,
-    job_id: int,
-    score: float,
-    explanation: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> int:
-    # Upsert one resume-job match score and return match id
+#NOTE - removing for now, but not deleting since could potentially have porpose - should prolly just delete later tho
+# def create_or_update_match(
+#     resume_id: int,
+#     job_id: int,
+#     score: float,
+#     explanation: Optional[str] = None,
+#     metadata: Optional[Dict[str, Any]] = None,
+# ) -> int:
+#     # Upsert one resume-job match score and return match id
+#     with extensions.get_db_pool().connection() as conn:
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 """
+#                 INSERT INTO matches (resume_id, job_id, score, explanation, metadata)
+#                 VALUES (%s, %s, %s, %s, %s::jsonb)
+#                 ON CONFLICT (resume_id, job_id)
+#                 DO UPDATE SET
+#                     score = EXCLUDED.score,
+#                     explanation = EXCLUDED.explanation,
+#                     metadata = EXCLUDED.metadata
+#                 RETURNING id
+#                 """,
+#                 (resume_id, job_id, score, explanation, json.dumps(metadata or {})),
+#             )
+#             match_id = cur.fetchone()[0]
+#     return int(match_id)
+
+
+#function to upload/update a list of matches for a resume to jobs into the database
+def create_or_update_matches(matches: List[List[Any]]) -> int:
+    if not matches:
+        return 0
+
+    query = """
+        INSERT INTO matches (resume_id, job_id, score, explanation, metadata)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (resume_id, job_id)
+        DO UPDATE SET
+            score = EXCLUDED.score,
+            explanation = EXCLUDED.explanation,
+            metadata = EXCLUDED.metadata
+    """
+
+    values = [
+        (
+            resume_id,
+            job_id,
+            score,
+            explanation,
+            Json(metadata or {})
+        )
+        for resume_id, job_id, score, explanation, metadata in matches
+    ]
+
     with extensions.get_db_pool().connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO matches (resume_id, job_id, score, explanation, metadata)
-                VALUES (%s, %s, %s, %s, %s::jsonb)
-                ON CONFLICT (resume_id, job_id)
-                DO UPDATE SET
-                    score = EXCLUDED.score,
-                    explanation = EXCLUDED.explanation,
-                    metadata = EXCLUDED.metadata
-                RETURNING id
-                """,
-                (resume_id, job_id, score, explanation, json.dumps(metadata or {})),
-            )
-            match_id = cur.fetchone()[0]
-    return int(match_id)
+            cur.executemany(query, values)
+
+    return len(matches)
 
 
 def clear_matches_for_resume(resume_id: int) -> int:
