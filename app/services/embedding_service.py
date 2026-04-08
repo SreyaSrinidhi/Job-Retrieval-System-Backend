@@ -21,6 +21,28 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
 
 def compare_texts(text1: str, text2: str) -> float:
     emb1 = embed_text(text1)
-    emb2 = embed_text(text2)
+    emb2 = embed_text(text2) # to be replaced with fetched embeddings
 
     return cosine_similarity(emb1, emb2)
+
+def build_job_embedding_text(job):
+    tags = job.get("tags") or []
+
+    if isinstance(tags, list):
+        tags_str = ", ".join(tags)
+    else:
+        tags_str = str(tags)
+
+    return f"""
+    Job Posting:
+
+    Title: {job["title"]}
+    Company: {job["company"]}
+
+    Required Skills: {tags_str}
+    Key Skills: {tags_str}
+
+    Description: {job.get("description", "")}
+
+    This role is for a {job["title"]} requiring skills in {tags_str}.
+    """

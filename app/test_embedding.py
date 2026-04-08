@@ -1,6 +1,6 @@
 from services.embedding_service import compare_texts
 
-resume = "Software Engineer"
+resume = "Skills: Cardiology, Patient Care, Clinical Research, Role: Cardiologist, Experience: Diagnosed and treated heart conditions"
 
 jobs = [
     "Backend Java engineer",
