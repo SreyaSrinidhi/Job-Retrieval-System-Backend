@@ -379,6 +379,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             url, apply_url, slug, company_logo,
             tags, description,
             date_posted, epoch, salary_min, salary_max,
+            embedding,
             is_active, last_seen_at,
             created_at, updated_at
         )
@@ -388,6 +389,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             %(url)s, %(apply_url)s, %(slug)s, %(company_logo)s,
             %(tags)s::jsonb, %(description)s,
             %(date_posted)s, %(epoch)s, %(salary_min)s, %(salary_max)s,
+            %(embedding)s,
             TRUE, NOW(),
             NOW(), NOW()
         )
@@ -406,6 +408,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             epoch = EXCLUDED.epoch,
             salary_min = EXCLUDED.salary_min,
             salary_max = EXCLUDED.salary_max,
+            embedding = EXCLUDED.embedding,
             is_active = TRUE,
             last_seen_at = NOW(),
             updated_at = NOW();
@@ -421,6 +424,15 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
 
     rows: List[Dict[str, Any]] = []
     for j in jobs:
+        text = build_job_embedding_text({
+            "title": j.title,
+            "company": j.company,
+            "description": j.description,
+            "tags": j.tags or []
+        })
+
+        embedding = embed_text(text)
+
         rows.append(
             {
                 "source": j.source,
@@ -438,6 +450,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
                 "epoch": j.epoch,
                 "salary_min": j.salary_min,
                 "salary_max": j.salary_max,
+                "embedding": embedding,
             }
         )
 
