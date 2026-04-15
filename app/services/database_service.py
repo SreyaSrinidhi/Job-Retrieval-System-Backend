@@ -8,6 +8,7 @@ import requests
 import hashlib
 import re
 from psycopg.types.json import Json
+from app.services.embedding_service import build_job_embedding_text, embed_text
 
 
 #function to list all jobs on the database
@@ -815,3 +816,32 @@ def sync_simplify_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
         "upserted": len(rows),
         "deactivated": deactivated,
     }
+
+def embed_and_store_single_job(job):
+    """
+    Takes a job dict and updates its embedding in DB
+    """
+    pool = extensions.get_db_pool()
+
+    text = build_job_embedding_text(job)
+    embedding = embed_text(text)
+
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE jobs
+                SET embedding = %s
+                WHERE id = %s
+            """, (embedding, job["id"]))
+
+def embed_and_store_jobs():
+    pool = extensions.get_db_pool()
+
+    jobs = list_active_jobs_for_matching()
+    print(f"Found {len(jobs)} jobs")
+
+    for job in jobs:
+        embed_and_store_single_job(job)
+
+    pool.close()
+    print("Job embeddings stored successfully")
