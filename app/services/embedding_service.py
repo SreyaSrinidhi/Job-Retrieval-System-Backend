@@ -3,6 +3,7 @@ import os
 import numpy as np
 from typing import List
 from sentence_transformers import SentenceTransformer
+from app.services.database_service import get_job_embedding
 
 load_dotenv()
 
@@ -19,9 +20,12 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
 
-def compare_texts(text1: str, text2: str) -> float:
+def compare_text_to_job(text1: str, job_id: int) -> float:
     emb1 = embed_text(text1)
-    emb2 = embed_text(text2) # to be replaced with fetched embeddings
+
+    emb2 = get_job_embedding(job_id)
+    if emb2 is None:
+        raise ValueError(f"No embedding found for job_id={job_id}")
 
     return cosine_similarity(emb1, emb2)
 

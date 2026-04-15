@@ -858,3 +858,19 @@ def embed_and_store_jobs():
 
     pool.close()
     print("Job embeddings stored successfully")
+
+def get_job_embedding(job_id: int) -> Optional[list[float]]:
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT embedding
+                FROM jobs
+                WHERE id = %s
+            """, (job_id,))
+
+            row = cur.fetchone()
+
+            if row is None:
+                return None
+
+            return row[0]  # pgvector returns list-like
