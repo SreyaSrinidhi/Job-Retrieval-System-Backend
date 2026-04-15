@@ -108,7 +108,7 @@ def get_latest_resume_extraction(resume_id: int) -> Optional[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT id, resume_id, extracted_json, model_name, created_at
+                SELECT id, resume_id, extracted_json, embedding, model_name, created_at
                 FROM resume_extractions
                 WHERE resume_id = %s
                 ORDER BY created_at DESC, id DESC
@@ -276,27 +276,6 @@ def list_top_matches_for_resume(resume_id: int, limit: int = 10) -> list[dict[st
         if row.get("date_posted"):
             row["date_posted"] = row["date_posted"].isoformat()
     return rows
-
-def run_matching(resume_id: int, resume_json: dict):
-    # 1. Build embedding text
-    text = build_resume_embedding_text(resume_json)
-
-    # 2. Embed resume
-    resume_embedding = embed_text(text)
-
-    # 3. Clear old matches
-    clear_matches_for_resume(resume_id)
-
-    # 4. Compute matches (DB does similarity)
-    rows = compute_matches_for_resume(resume_id, resume_embedding)
-
-    # 5. Format for DB
-    matches = build_matches_payload(resume_id, rows)
-
-    # 6. Store
-    create_or_update_matches(matches)
-
-    return len(matches)
 
 #-------------------Service functions for syncing RemoteOK and SimplifyJobs----------------------------
 

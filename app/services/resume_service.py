@@ -3,6 +3,7 @@ import time
 from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
 from app.services.embedding_service import embed_text
+from app.services.database_service import compute_matches_for_resume
 
 from app.services.resume_utils.resume_parser import (
     parse_resume_file,
@@ -98,75 +99,38 @@ def _tokenize_text(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9+#.\-]+", text.lower()))
 
 def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
-    # Score one resume against all active jobs and persist match rows
-    # TODO - we need to add more complex scoring logic later
-
+    # 1. Get latest extraction (contains embedding)
     extraction = get_latest_resume_extraction(resume_id)
     if not extraction:
         raise ValueError(f"No extraction found for resume_id={resume_id}")
 
-    extracted_json = extraction.get("extracted_json")
-    if not isinstance(extracted_json, dict):
-        raise ValueError(f"Invalid extraction payload for resume_id={resume_id}")
+    resume_embedding = extraction.get("embedding")
+    if resume_embedding is None:
+        raise ValueError("Resume embedding not found")
 
-    keywords = _normalize_keywords(extracted_json)
-
+    # 2. Clear old matches
     clear_matches_for_resume(resume_id)
 
-    if not keywords:
-        return {"resume_id": resume_id, "keywords": 0, "jobs_scored": 0, "matches_saved": 0}
+    # 3. Compute matches using DB (THIS is the key)
+    rows = compute_matches_for_resume(resume_id, resume_embedding, top_k=50)
 
-    jobs = list_active_jobs_for_matching()
-    matches_saved = 0
+    # 4. Build payload
     matches = []
-    
-    for job in jobs:
-        tags = job.get("tags") or []
-        if isinstance(tags, list):
-            tags_text = " ".join(str(tag) for tag in tags)
-        else:
-            tags_text = str(tags)
+    for job_id, similarity in rows:
+        matches.append([
+            resume_id,
+            int(job_id),
+            float(similarity),
+            None,
+            {}
+        ])
 
-        combined_text = " ".join(
-            [
-                str(job.get("title") or ""),
-                str(job.get("company") or ""),
-                str(job.get("location") or ""),
-                str(job.get("description") or ""),
-                tags_text,
-            ]
-        ).lower()
-
-        tokens = _tokenize_text(combined_text)
-
-        matched_keywords: List[str] = []
-
-        for keyword in keywords:
-            if " " in keyword:
-                if keyword in combined_text:
-                    matched_keywords.append(keyword)
-            elif keyword in tokens:
-                matched_keywords.append(keyword)
-
-        if not matched_keywords:
-            continue
-
-        score = round((len(matched_keywords) / len(keywords)) * 100.0, 2)
-        explanation = f"Matched {len(matched_keywords)} of {len(keywords)} keywords."
-        metadata = {"matched_keywords": matched_keywords, "total_keywords": len(keywords)}
-
-        #add to list of matches
-        matches.append([resume_id, int(job["id"]), score, explanation, metadata])
-        matches_saved += 1
-
-    #update matches in DB
+    # 5. Store matches
     create_or_update_matches(matches)
 
     return {
         "resume_id": resume_id,
-        "keywords": len(keywords),
-        "jobs_scored": len(jobs),
-        "matches_saved": matches_saved,
+        "matches_saved": len(matches),
     }
 
 
