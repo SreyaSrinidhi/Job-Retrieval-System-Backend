@@ -3,7 +3,6 @@ import time
 from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
 from app.services.embedding_service import embed_text
-from app.services.database_service import store_resume_embedding
 
 from app.services.resume_utils.resume_parser import (
     parse_resume_file,
