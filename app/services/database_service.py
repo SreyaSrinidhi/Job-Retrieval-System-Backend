@@ -84,21 +84,22 @@ def create_resume(resume_text: str, filename: Optional[str] = None, file_url: Op
 
 
 def create_resume_extraction(
-    resume_id: int, extracted_json: Dict[str, Any], model_name: Optional[str] = None
+    resume_id: int,
+    extracted_json: Dict[str, Any],
+    embedding: List[float],
+    model_name: Optional[str] = None
 ) -> int:
-    # Store structured LLM extraction for a resume; return extraction id
     with extensions.get_db_pool().connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO resume_extractions (resume_id, extracted_json, model_name)
-                VALUES (%s, %s::jsonb, %s)
+            cur.execute("""
+                INSERT INTO resume_extractions (
+                    resume_id, extracted_json, embedding, model_name
+                )
+                VALUES (%s, %s::jsonb, %s, %s)
                 RETURNING id
-                """,
-                (resume_id, json.dumps(extracted_json), model_name),
-            )
-            extraction_id = cur.fetchone()[0]
-    return int(extraction_id)
+            """, (resume_id, json.dumps(extracted_json), embedding, model_name))
+
+            return cur.fetchone()[0]
 
 
 def get_latest_resume_extraction(resume_id: int) -> Optional[dict[str, Any]]:
@@ -163,6 +164,36 @@ def list_active_jobs_for_matching() -> list[dict[str, Any]]:
 #             match_id = cur.fetchone()[0]
 #     return int(match_id)
 
+def compute_matches_for_resume(resume_id: int, resume_embedding: list[float], top_k: int = 10):
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id,
+                       1 - (embedding <=> %s) AS similarity
+                FROM jobs
+                WHERE is_active = TRUE
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> %s
+                LIMIT %s;
+            """, (resume_embedding, resume_embedding, top_k))
+
+            rows = cur.fetchall()
+
+    return rows
+
+def build_matches_payload(resume_id: int, rows):
+    matches = []
+
+    for job_id, similarity in rows:
+        matches.append([
+            resume_id,
+            job_id,
+            float(similarity),   # score
+            None,                # explanation (add later)
+            {}                   # metadata
+        ])
+
+    return matches
 
 #function to upload/update a list of matches for a resume to jobs into the database
 def create_or_update_matches(matches: List[List[Any]]) -> int:
@@ -246,7 +277,26 @@ def list_top_matches_for_resume(resume_id: int, limit: int = 10) -> list[dict[st
             row["date_posted"] = row["date_posted"].isoformat()
     return rows
 
+def run_matching(resume_id: int, resume_json: dict):
+    # 1. Build embedding text
+    text = build_resume_embedding_text(resume_json)
 
+    # 2. Embed resume
+    resume_embedding = embed_text(text)
+
+    # 3. Clear old matches
+    clear_matches_for_resume(resume_id)
+
+    # 4. Compute matches (DB does similarity)
+    rows = compute_matches_for_resume(resume_id, resume_embedding)
+
+    # 5. Format for DB
+    matches = build_matches_payload(resume_id, rows)
+
+    # 6. Store
+    create_or_update_matches(matches)
+
+    return len(matches)
 
 #-------------------Service functions for syncing RemoteOK and SimplifyJobs----------------------------
 
@@ -829,6 +879,8 @@ def sync_simplify_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
         "upserted": len(rows),
         "deactivated": deactivated,
     }
+
+# --------- Embedding Functions ---------
 
 def embed_and_store_single_job(job):
     """

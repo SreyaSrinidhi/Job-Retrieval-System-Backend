@@ -2,6 +2,8 @@ import re
 import time
 from typing import Any, Dict, List
 from werkzeug.datastructures import FileStorage
+from app.services.embedding_service import embed_text
+from app.services.database_service import store_resume_embedding
 
 from app.services.resume_utils.resume_parser import (
     parse_resume_file,
@@ -55,10 +57,13 @@ def process_uploaded_resume(file: FileStorage, user_job_description: str) -> Dic
     resume_text = parse_resume_file(file)
     extracted_skills = extract_skills_from_resume_text(resume_text, user_job_description)
 
+    resume_embedding = generate_resume_embedding(extracted_skills)
+
     resume_id = create_resume(resume_text=resume_text, filename=file.filename)
     extraction_id = create_resume_extraction(
         resume_id=resume_id,
         extracted_json=extracted_skills,
+        embedding=resume_embedding,
         model_name="gemini-2.5-flash",
     )
 
@@ -169,3 +174,12 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
 def get_display_jobs_for_resume(resume_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     # Fetch top ranked jobs to send to the frontend
     return list_top_matches_for_resume(resume_id=resume_id, limit=limit)
+
+
+def build_resume_embedding_text_from_keywords(keywords: List[str]) -> str:
+    return "Skills: " + ", ".join(keywords)
+
+def generate_resume_embedding(extracted_json: Dict[str, Any]) -> List[float]:
+    keywords = _normalize_keywords(extracted_json)
+    text = build_resume_embedding_text_from_keywords(keywords)
+    return embed_text(text)
