@@ -167,6 +167,7 @@ def list_active_jobs_for_matching() -> list[dict[str, Any]]:
 def compute_matches_for_resume(resume_id: int, resume_embedding: list[float], top_k: int = 10):
     with extensions.get_db_pool().connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SET ivfflat.probes = 10;")
             cur.execute("""
                 SELECT id,
                        1 - (embedding <=> %s) AS similarity

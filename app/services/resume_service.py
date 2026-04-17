@@ -113,6 +113,7 @@ def score_resume_against_jobs(resume_id: int) -> Dict[str, Any]:
 
     # 3. Compute matches using DB (THIS is the key)
     rows = compute_matches_for_resume(resume_id, resume_embedding, top_k=50)
+    print ("[DEBUG] Row length", len(rows))
 
     # 4. Build payload
     matches = []
