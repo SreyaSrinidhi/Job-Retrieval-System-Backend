@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS resume_extractions (
     -- e.g. {"skills":["python","sql"], "titles":["data analyst"], ...}
     extracted_json  JSONB NOT NULL,
     -- 1536 is a common embedding size. If we choose a different embedding model later, this dimension may need to change.
-    embedding       vector(1536),
+    embedding       vector(384),
 
     model_name      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

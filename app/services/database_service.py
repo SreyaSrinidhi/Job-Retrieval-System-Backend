@@ -8,6 +8,7 @@ import requests
 import hashlib
 import re
 from psycopg.types.json import Json
+from app.services.embedding_service import build_job_embedding_text, embed_text
 
 
 #function to list all jobs on the database
@@ -83,21 +84,22 @@ def create_resume(resume_text: str, filename: Optional[str] = None, file_url: Op
 
 
 def create_resume_extraction(
-    resume_id: int, extracted_json: Dict[str, Any], model_name: Optional[str] = None
+    resume_id: int,
+    extracted_json: Dict[str, Any],
+    embedding: List[float],
+    model_name: Optional[str] = None
 ) -> int:
-    # Store structured LLM extraction for a resume; return extraction id
     with extensions.get_db_pool().connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO resume_extractions (resume_id, extracted_json, model_name)
-                VALUES (%s, %s::jsonb, %s)
+            cur.execute("""
+                INSERT INTO resume_extractions (
+                    resume_id, extracted_json, embedding, model_name
+                )
+                VALUES (%s, %s::jsonb, %s, %s)
                 RETURNING id
-                """,
-                (resume_id, json.dumps(extracted_json), model_name),
-            )
-            extraction_id = cur.fetchone()[0]
-    return int(extraction_id)
+            """, (resume_id, json.dumps(extracted_json), embedding, model_name))
+
+            return cur.fetchone()[0]
 
 
 def get_latest_resume_extraction(resume_id: int) -> Optional[dict[str, Any]]:
@@ -106,7 +108,7 @@ def get_latest_resume_extraction(resume_id: int) -> Optional[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT id, resume_id, extracted_json, model_name, created_at
+                SELECT id, resume_id, extracted_json, embedding, model_name, created_at
                 FROM resume_extractions
                 WHERE resume_id = %s
                 ORDER BY created_at DESC, id DESC
@@ -162,6 +164,37 @@ def list_active_jobs_for_matching() -> list[dict[str, Any]]:
 #             match_id = cur.fetchone()[0]
 #     return int(match_id)
 
+def compute_matches_for_resume(resume_id: int, resume_embedding: list[float], top_k: int = 10):
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SET ivfflat.probes = 10;")
+            cur.execute("""
+                SELECT id,
+                       1 - (embedding <=> %s) AS similarity
+                FROM jobs
+                WHERE is_active = TRUE
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> %s
+                LIMIT %s;
+            """, (resume_embedding, resume_embedding, top_k))
+
+            rows = cur.fetchall()
+
+    return rows
+
+def build_matches_payload(resume_id: int, rows):
+    matches = []
+
+    for job_id, similarity in rows:
+        matches.append([
+            resume_id,
+            job_id,
+            float(similarity),   # score
+            None,                # explanation (add later)
+            {}                   # metadata
+        ])
+
+    return matches
 
 #function to upload/update a list of matches for a resume to jobs into the database
 def create_or_update_matches(matches: List[List[Any]]) -> int:
@@ -244,8 +277,6 @@ def list_top_matches_for_resume(resume_id: int, limit: int = 10) -> list[dict[st
         if row.get("date_posted"):
             row["date_posted"] = row["date_posted"].isoformat()
     return rows
-
-
 
 #-------------------Service functions for syncing RemoteOK and SimplifyJobs----------------------------
 
@@ -378,6 +409,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             url, apply_url, slug, company_logo,
             tags, description,
             date_posted, epoch, salary_min, salary_max,
+            embedding,
             is_active, last_seen_at,
             created_at, updated_at
         )
@@ -387,6 +419,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             %(url)s, %(apply_url)s, %(slug)s, %(company_logo)s,
             %(tags)s::jsonb, %(description)s,
             %(date_posted)s, %(epoch)s, %(salary_min)s, %(salary_max)s,
+            %(embedding)s,
             TRUE, NOW(),
             NOW(), NOW()
         )
@@ -405,6 +438,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
             epoch = EXCLUDED.epoch,
             salary_min = EXCLUDED.salary_min,
             salary_max = EXCLUDED.salary_max,
+            embedding = EXCLUDED.embedding,
             is_active = TRUE,
             last_seen_at = NOW(),
             updated_at = NOW();
@@ -420,6 +454,15 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
 
     rows: List[Dict[str, Any]] = []
     for j in jobs:
+        text = build_job_embedding_text({
+            "title": j.title,
+            "company": j.company,
+            "description": j.description,
+            "tags": j.tags or []
+        })
+
+        embedding = embed_text(text)
+
         rows.append(
             {
                 "source": j.source,
@@ -437,6 +480,7 @@ def sync_remoteok_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
                 "epoch": j.epoch,
                 "salary_min": j.salary_min,
                 "salary_max": j.salary_max,
+                "embedding": embedding,
             }
         )
 
@@ -815,3 +859,50 @@ def sync_simplify_jobs(limit: int = 1000, inactive_after_days: int = 10) -> Dict
         "upserted": len(rows),
         "deactivated": deactivated,
     }
+
+# --------- Embedding Functions ---------
+
+def embed_and_store_single_job(job):
+    """
+    Takes a job dict and updates its embedding in DB
+    """
+    pool = extensions.get_db_pool()
+
+    text = build_job_embedding_text(job)
+    embedding = embed_text(text)
+
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE jobs
+                SET embedding = %s
+                WHERE id = %s
+            """, (embedding, job["id"]))
+
+def embed_and_store_jobs():
+    pool = extensions.get_db_pool()
+
+    jobs = list_active_jobs_for_matching()
+    print(f"Found {len(jobs)} jobs")
+
+    for job in jobs:
+        embed_and_store_single_job(job)
+
+    pool.close()
+    print("Job embeddings stored successfully")
+
+def get_job_embedding(job_id: int) -> Optional[list[float]]:
+    with extensions.get_db_pool().connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT embedding
+                FROM jobs
+                WHERE id = %s
+            """, (job_id,))
+
+            row = cur.fetchone()
+
+            if row is None:
+                return None
+
+            return row[0]  # pgvector returns list-like

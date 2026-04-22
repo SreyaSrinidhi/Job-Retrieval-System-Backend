@@ -94,6 +94,7 @@ def get_resume_matches(resume_id: int) -> tuple:
 
     try:
         matches = get_display_jobs_for_resume(resume_id=resume_id, limit=limit)
+        print ("[DEBUG] Matches: ", matches)
         return jsonify({"status": "ok", "resume_id": resume_id, "count": len(matches), "jobs": matches}), 200
     except Exception:
         return jsonify({"status": "error", "message": "failed to fetch matches"}), 500
